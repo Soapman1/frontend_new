@@ -103,7 +103,7 @@ function Track() {
         plate_number: data.plate_number || searchPlate.toUpperCase(),
         status: data.status || 'В очереди',
         wait_time: data.wait_time,
-        created_at: data.created_at,
+        created_at: data.expires_at,
         isActive: true,
         addedAt: Date.now()
       };
@@ -130,10 +130,9 @@ function Track() {
   };
 
   const getRemainingTime = (car) => {
-    if (!car.created_at || !car.wait_time) return null;
-    const endTime = new Date(car.created_at).getTime() + car.wait_time * 60000;
-    return endTime - currentTime;
-  };
+  if (!car.expires_at) return null;  // Если нет expires_at, используем старый метод
+  return new Date(car.expires_at).getTime() - Date.now();
+};
 
   // Разделение: активные все кроме "Завершено"
   const activeCars = trackedCars.filter(c => c.status !== 'Завершено');
@@ -201,7 +200,7 @@ function Track() {
                     {/* Когда Готово - показываем сообщение */}
                     {isReady && (
                       <div style={{ marginTop: '10px', color: '#16a34a', fontWeight: '600', fontSize: '14px' }}>
-                        ✅ Можно забирать! (Таймер остановлен)
+                        ✅ Можно забирать!
                       </div>
                     )}
                   </div>
@@ -231,7 +230,7 @@ function Track() {
                 <div className="car-content">
                   <div className="car-plate car-plate-muted">{car.plate_number}</div>
                   <div className="car-status">
-                    <span className="status-done">✅ Завершено (выдано клиенту)</span>
+                    <span className="status-done">✅ Завершено </span>
                   </div>
                 </div>
                 
