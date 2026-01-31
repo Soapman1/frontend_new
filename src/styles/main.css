@@ -371,6 +371,15 @@ button:hover {
   border-color: #fecaca;
 }
 
+.btn-secondary {
+  background: #9ca3af;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #6b7280;
+}
+
 /* ===== MOBILE ADAPTIVE ===== */
 @media (max-width: 640px) {
   .page {
@@ -404,4 +413,6 @@ button:hover {
     padding: 16px 32px;
     font-size: 16px;
   }
+
+  
 }
