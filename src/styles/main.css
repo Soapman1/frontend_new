@@ -494,6 +494,33 @@ button:hover {
   align-items: center;
 }
 
+/* Добавь в конец main.css */
+
+/* ===== TIMER WAITING TEXT ===== */
+.timer-waiting {
+  font-weight: 600;
+  font-size: 14px;
+  color: #f59e0b; /* Желтый/оранжевый */
+  font-style: italic;
+}
+
+/* ===== STATUS READY ===== */
+.status-ready {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+/* ===== NO TIMER BLOCK ===== */
+.no-timer {
+  margin-top: 10px;
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ===== MOBILE ADAPTIVE ===== */
 @media (max-width: 640px) {
   .page {

@@ -53,10 +53,9 @@ function Track() {
             const res = await axios.get(`${API_URL}/api/public/car-status?plate=${normalized}`);
             
             const data = res.data;
-            const isExpired = data.created_at && data.wait_time && 
-              (new Date(data.created_at).getTime() + data.wait_time * 60000 < Date.now());
             
-            const isActive = data.status !== 'Готово' && !isExpired;
+            // Активна если не "Завершено" (не найдена в БД)
+            const isActive = true;
             
             return { 
               ...car, 
@@ -65,10 +64,11 @@ function Track() {
               lastCheck: Date.now()
             };
           } catch (err) {
+            // 404 = статус "Завершено" (удалена из БД)
             if (err.response?.status === 404) {
               return { 
                 ...car, 
-                status: 'Не найдено', 
+                status: 'Завершено', 
                 isActive: false,
                 lastCheck: Date.now()
               };
@@ -98,15 +98,13 @@ function Track() {
     try {
       const res = await axios.get(`${API_URL}/api/public/car-status?plate=${normalized}`);
       const data = res.data;
-      const isExpired = data.created_at && data.wait_time && 
-        (new Date(data.created_at).getTime() + data.wait_time * 60000 < Date.now());
       
       const newCar = {
         plate_number: data.plate_number || searchPlate.toUpperCase(),
         status: data.status || 'В очереди',
         wait_time: data.wait_time,
         created_at: data.created_at,
-        isActive: data.status !== 'Готово' && !isExpired,
+        isActive: true,
         addedAt: Date.now()
       };
       
@@ -116,7 +114,7 @@ function Track() {
       if (err.response?.status === 404) {
         setTrackedCars([...trackedCars, {
           plate_number: searchPlate.toUpperCase(),
-          status: 'Ожидает добавления',
+          status: 'Не найдено',
           isActive: false,
           addedAt: Date.now()
         }]);
@@ -137,8 +135,9 @@ function Track() {
     return endTime - currentTime;
   };
 
-  const activeCars = trackedCars.filter(c => c.isActive);
-  const inactiveCars = trackedCars.filter(c => !c.isActive);
+  // Разделение: активные все кроме "Завершено"
+  const activeCars = trackedCars.filter(c => c.status !== 'Завершено');
+  const inactiveCars = trackedCars.filter(c => c.status === 'Завершено');
 
   return (
     <div className="page">
@@ -162,30 +161,49 @@ function Track() {
           <ul className="car-list">
             {activeCars.map(car => {
               const remaining = getRemainingTime(car);
-              const percent = remaining ? Math.max(0, (remaining / (car.wait_time * 60000)) * 100) : 0;
+              const isTimeOver = remaining !== null && remaining <= 0;
+              const isReady = car.status === 'Готово';
               
               return (
                 <li key={car.plate_number} className="car-item car-active">
                   <div className="car-content">
                     <div className="car-plate">{car.plate_number}</div>
                     <div className="car-status">
-                      Статус: <span className="status-active-text">{car.status}</span>
+                      Статус: <span className={isReady ? 'status-active-text' : 'status-active-text'}>{car.status}</span>
                     </div>
                     
-                    <div className="timer-block">
-                      <div className="timer-header">
-                        <span>Осталось:</span>
-                        <span className={`timer-value ${percent < 20 ? 'timer-value-urgent' : 'timer-value-normal'}`}>
-                          {remaining ? formatTime(remaining) : '--:--'}
-                        </span>
+                    {/* Таймер только если не "Готово" */}
+                    {!isReady && (
+                      <div className="timer-block">
+                        <div className="timer-header">
+                          <span>Осталось:</span>
+                          {isTimeOver ? (
+                            <span className="timer-waiting">Ещё чуть-чуть...</span>
+                          ) : (
+                            <span className={`timer-value ${remaining < 60000 ? 'timer-value-urgent' : 'timer-value-normal'}`}>
+                              {formatTime(remaining)}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Прогресс-бар только если время не вышло */}
+                        {!isTimeOver && (
+                          <div className="timer-bar-bg">
+                            <div className="timer-bar-fill" style={{
+                              width: `${Math.max(0, (remaining / (car.wait_time * 60000)) * 100)}%`,
+                              background: remaining < 60000 ? '#ef4444' : '#22c55e'
+                            }} />
+                          </div>
+                        )}
                       </div>
-                      <div className="timer-bar-bg">
-                        <div className="timer-bar-fill" style={{
-                          width: `${percent}%`,
-                          background: percent < 20 ? '#ef4444' : '#22c55e'
-                        }} />
+                    )}
+                    
+                    {/* Когда Готово - показываем сообщение */}
+                    {isReady && (
+                      <div style={{ marginTop: '10px', color: '#16a34a', fontWeight: '600', fontSize: '14px' }}>
+                        ✅ Можно забирать! (Таймер остановлен)
                       </div>
-                    </div>
+                    )}
                   </div>
                   
                   <button 
@@ -205,7 +223,7 @@ function Track() {
       {inactiveCars.length > 0 && (
         <div className="section-inactive">
           <h3 className="section-title section-title-inactive">
-            ⚪ Неактивные ({inactiveCars.length})
+            ⚪ Завершенные ({inactiveCars.length})
           </h3>
           <ul className="car-list">
             {inactiveCars.map(car => (
@@ -213,13 +231,7 @@ function Track() {
                 <div className="car-content">
                   <div className="car-plate car-plate-muted">{car.plate_number}</div>
                   <div className="car-status">
-                    {car.status === 'Готово' ? (
-                      <span className="status-done">✅ Мойка завершена</span>
-                    ) : car.status === 'Не найдено' ? (
-                      <span className="waiting-text">⏳ Ожидает добавления оператором</span>
-                    ) : (
-                      car.status
-                    )}
+                    <span className="status-done">✅ Завершено (выдано клиенту)</span>
                   </div>
                 </div>
                 

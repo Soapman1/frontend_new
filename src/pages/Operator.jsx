@@ -123,6 +123,7 @@ function Operator() {
                   <option>В очереди</option>
                   <option>В работе</option>
                   <option>Готово</option>
+                  <option>Завершено</option>
                 </select>
               </div>
             </div>
