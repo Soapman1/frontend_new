@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://car-status-backend.onrender.com';
+const API_URL = process.env.REACT_APP_API_URL || 'https://car-status-backend.onrender.com';
 
 const normalizePlate = (plate) => {
   if (!plate) return '';
@@ -9,7 +9,6 @@ const normalizePlate = (plate) => {
   return plate.toString().toUpperCase().replace(/\s/g, '').replace(/-/g, '').replace(/[АВЕКМНОРСТУХ]/g, char => map[char] || char);
 };
 
-// Форматирование оставшегося времени
 const formatTime = (ms) => {
   if (ms <= 0) return '00:00';
   const totalSeconds = Math.floor(ms / 1000);
@@ -18,238 +17,228 @@ const formatTime = (ms) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// Получение цвета в зависимости от оставшегося времени
-const getTimeColor = (percent) => {
-  if (percent <= 0) return '#a5a5a5'; // Красное (время вышло)
-  if (percent < 20) return '#fd7e14'; // Оранжевое (< 20%)
-  if (percent < 50) return '#ffc107'; // Желтое (< 50%)
-  return '#28a745'; // Зеленое (> 50%)
-};
-
 function Track() {
   const [searchPlate, setSearchPlate] = useState('');
-  const [trackingCars, setTrackingCars] = useState([]);
-  const [currentTime, setCurrentTime] = useState(Date.now()); // ✅ Один таймер на все машины
+  const [trackedCars, setTrackedCars] = useState([]);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
-  // ✅ Один setInterval для всех 100+ машин (не нагружает систему)
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000); // Обновление каждую секунду
-    
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Расчет оставшегося времени для машины
-  const getCarTimeInfo = (car) => {
-    if (!car.created_at || !car.wait_time) return null;
-    
-    const created = new Date(car.created_at).getTime();
-    const duration = car.wait_time * 60 * 1000; // минуты → миллисекунды
-    const endTime = created + duration;
-    const remaining = endTime - currentTime;
-    const percent = Math.max(0, (remaining / duration) * 100);
-    
-    return {
-      remaining,
-      percent,
-      isExpired: remaining <= 0,
-      formatted: formatTime(remaining)
-    };
-  };
+  useEffect(() => {
+    const saved = localStorage.getItem('trackedCars');
+    if (saved) {
+      try {
+        setTrackedCars(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error parsing saved cars', e);
+      }
+    }
+  }, []);
 
-  const findCar = async () => {
+  useEffect(() => {
+    localStorage.setItem('trackedCars', JSON.stringify(trackedCars));
+  }, [trackedCars]);
+
+  useEffect(() => {
+    if (trackedCars.length === 0) return;
+
+    const checkStatuses = async () => {
+      const updated = await Promise.all(
+        trackedCars.map(async (car) => {
+          try {
+            const normalized = normalizePlate(car.plate_number);
+            const res = await axios.get(`${API_URL}/api/public/car-status?plate=${normalized}`);
+            
+            const data = res.data;
+            const isExpired = data.created_at && data.wait_time && 
+              (new Date(data.created_at).getTime() + data.wait_time * 60000 < Date.now());
+            
+            const isActive = data.status !== 'Готово' && !isExpired;
+            
+            return { 
+              ...car, 
+              ...data, 
+              isActive,
+              lastCheck: Date.now()
+            };
+          } catch (err) {
+            if (err.response?.status === 404) {
+              return { 
+                ...car, 
+                status: 'Не найдено', 
+                isActive: false,
+                lastCheck: Date.now()
+              };
+            }
+            return car;
+          }
+        })
+      );
+      setTrackedCars(updated);
+    };
+
+    checkStatuses();
+    const interval = setInterval(checkStatuses, 5000);
+    return () => clearInterval(interval);
+  }, [trackedCars.map(c => c.plate_number).join(',')]);
+
+  const addToTrack = async () => {
     if (!searchPlate.trim()) return;
+    
+    const normalized = normalizePlate(searchPlate);
+    
+    if (trackedCars.some(c => normalizePlate(c.plate_number) === normalized)) {
+      alert('Этот номер уже отслеживается');
+      return;
+    }
 
     try {
-      const normalized = normalizePlate(searchPlate);
       const res = await axios.get(`${API_URL}/api/public/car-status?plate=${normalized}`);
-
-      if (!res.data?.plate_number) {
-        return alert('Авто не найдено');
-      }
-
-      // Проверяем не добавлено ли уже
-      const exists = trackingCars.some(car => car.plate_number === res.data.plate_number);
-      if (!exists) {
-        setTrackingCars(prev => [...prev, res.data]);
+      const data = res.data;
+      const isExpired = data.created_at && data.wait_time && 
+        (new Date(data.created_at).getTime() + data.wait_time * 60000 < Date.now());
+      
+      const newCar = {
+        plate_number: data.plate_number || searchPlate.toUpperCase(),
+        status: data.status || 'В очереди',
+        wait_time: data.wait_time,
+        created_at: data.created_at,
+        isActive: data.status !== 'Готово' && !isExpired,
+        addedAt: Date.now()
+      };
+      
+      setTrackedCars([...trackedCars, newCar]);
+      setSearchPlate('');
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setTrackedCars([...trackedCars, {
+          plate_number: searchPlate.toUpperCase(),
+          status: 'Ожидает добавления',
+          isActive: false,
+          addedAt: Date.now()
+        }]);
         setSearchPlate('');
       } else {
-        alert('Это авто уже в списке');
+        alert('Ошибка при поиске');
       }
-    } catch (err) {
-      alert('Авто не найдено');
     }
   };
 
-  // Автообновление статусов с сервера (каждые 10 сек для снижения нагрузки)
-  useEffect(() => {
-    if (trackingCars.length === 0) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const updated = await Promise.all(
-          trackingCars.map(async car => {
-            if (!car.plate_number || car.status === 'Готово') return car; // Не обновляем готовые
-            
-            try {
-              const res = await axios.get(
-                `${API_URL}/api/public/car-status?plate=${car.plate_number}`
-              );
-              return { ...res.data, addedAt: car.addedAt };
-            } catch (err) {
-              if (err.response?.status === 404) return null;
-              return car;
-            }
-          })
-        );
-        setTrackingCars(updated.filter(Boolean));
-      } catch (e) {
-        console.error('Ошибка обновления', e);
-      }
-    }, 10000); // ✅ Раз в 10 секунд (не каждую секунду), чтобы не грузить сервер
-
-    return () => clearInterval(interval);
-  }, [trackingCars]);
-
-  // Удаление машины из списка
   const removeCar = (plate) => {
-    setTrackingCars(prev => prev.filter(c => c.plate_number !== plate));
+    setTrackedCars(trackedCars.filter(c => c.plate_number !== plate));
   };
 
-  return (
-    <div className="page" style={{ fontFamily: 'Arial, sans-serif', padding: '20px' }}>
-      <h2>Отследить авто</h2>
+  const getRemainingTime = (car) => {
+    if (!car.created_at || !car.wait_time) return null;
+    const endTime = new Date(car.created_at).getTime() + car.wait_time * 60000;
+    return endTime - currentTime;
+  };
 
-      <div className="search-block" style={{ marginBottom: '20px' }}>
+  const activeCars = trackedCars.filter(c => c.isActive);
+  const inactiveCars = trackedCars.filter(c => !c.isActive);
+
+  return (
+    <div className="page">
+      <h2>Отслеживание авто</h2>
+      
+      <div className="search-block">
         <input
           placeholder="Введите номер авто"
           value={searchPlate}
           onChange={e => setSearchPlate(e.target.value.toUpperCase())}
-          style={{ padding: '10px', fontSize: '16px', marginRight: '10px' }}
         />
-        <button 
-          onClick={findCar}
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}
-        >
-          Найти авто
-        </button>
+        <button onClick={addToTrack}>Добавить к отслеживанию</button>
       </div>
 
-      <ul className="tracking-list" style={{ listStyle: 'none', padding: 0 }}>
-        {trackingCars.map(car => {
-          const timeInfo = getCarTimeInfo(car);
-          
-          return (
-            <li 
-              key={car.plate_number} 
-              style={{ 
-                border: '1px solid #ddd', 
-                borderRadius: '8px', 
-                padding: '15px', 
-                marginBottom: '10px',
-                backgroundColor: timeInfo?.isExpired ? '#f8f9fa' : '#fff'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 5px 0' }}>{car.plate_number}</h3>
-                  <div style={{ 
-                    color: car.status === 'Готово' ? '#28a745' : '#666',
-                    fontWeight: car.status === 'Готово' ? 'bold' : 'normal'
-                  }}>
-                    Статус: {car.status}
+      {/* АКТИВНЫЕ */}
+      {activeCars.length > 0 && (
+        <div className="section-active">
+          <h3 className="section-title section-title-active">
+            🟢 Активные ({activeCars.length})
+          </h3>
+          <ul className="car-list">
+            {activeCars.map(car => {
+              const remaining = getRemainingTime(car);
+              const percent = remaining ? Math.max(0, (remaining / (car.wait_time * 60000)) * 100) : 0;
+              
+              return (
+                <li key={car.plate_number} className="car-item car-active">
+                  <div className="car-content">
+                    <div className="car-plate">{car.plate_number}</div>
+                    <div className="car-status">
+                      Статус: <span className="status-active-text">{car.status}</span>
+                    </div>
+                    
+                    <div className="timer-block">
+                      <div className="timer-header">
+                        <span>Осталось:</span>
+                        <span className={`timer-value ${percent < 20 ? 'timer-value-urgent' : 'timer-value-normal'}`}>
+                          {remaining ? formatTime(remaining) : '--:--'}
+                        </span>
+                      </div>
+                      <div className="timer-bar-bg">
+                        <div className="timer-bar-fill" style={{
+                          width: `${percent}%`,
+                          background: percent < 20 ? '#ef4444' : '#22c55e'
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => removeCar(car.plate_number)}
+                    className="btn-delete"
+                  >
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* НЕАКТИВНЫЕ */}
+      {inactiveCars.length > 0 && (
+        <div className="section-inactive">
+          <h3 className="section-title section-title-inactive">
+            ⚪ Неактивные ({inactiveCars.length})
+          </h3>
+          <ul className="car-list">
+            {inactiveCars.map(car => (
+              <li key={car.plate_number} className="car-item car-inactive">
+                <div className="car-content">
+                  <div className="car-plate car-plate-muted">{car.plate_number}</div>
+                  <div className="car-status">
+                    {car.status === 'Готово' ? (
+                      <span className="status-done">✅ Мойка завершена</span>
+                    ) : car.status === 'Не найдено' ? (
+                      <span className="waiting-text">⏳ Ожидает добавления оператором</span>
+                    ) : (
+                      car.status
+                    )}
                   </div>
                 </div>
                 
                 <button 
                   onClick={() => removeCar(car.plate_number)}
-                  style={{ 
-                    background: '#dc3545', 
-                    color: 'white', 
-                    border: 'none', 
-                    padding: '5px 10px', 
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
+                  className="btn-delete"
+                  style={{ opacity: 0.6 }}
                 >
                   ✕
                 </button>
-              </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-              {/* ✅ Таймер обратного отсчета */}
-              {car.status !== 'Готово' && timeInfo && (
-                <div style={{ marginTop: '10px' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    marginBottom: '5px',
-                    fontSize: '14px'
-                  }}>
-                    <span>Оставшееся время:</span>
-                    <span style={{ 
-                      fontWeight: 'bold', 
-                      fontSize: '18px',
-                      color: getTimeColor(timeInfo.percent)
-                    }}>
-                      {timeInfo.formatted}
-                    </span>
-                  </div>
-                  
-                  {/* Прогресс бар */}
-                  <div style={{ 
-                    width: '100%', 
-                    height: '8px', 
-                    backgroundColor: '#e9ecef', 
-                    borderRadius: '4px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${Math.min(100, timeInfo.percent)}%`,
-                      height: '100%',
-                      backgroundColor: getTimeColor(timeInfo.percent),
-                      transition: 'width 1s linear',
-                      borderRadius: '4px'
-                    }} />
-                  </div>
-                  
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                    Всего: {car.wait_time} мин
-                  </div>
-                  
-                  {timeInfo.isExpired && (
-                    <div style={{ 
-                      color: '#dc3545', 
-                      fontWeight: 'bold', 
-                      marginTop: '5px',
-                      fontSize: '14px'
-                    }}>
-                      Еще чуть-чуть
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {car.status === 'Готово' && (
-                <div style={{ 
-                  marginTop: '10px', 
-                  color: '#28a745', 
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}>
-                  ✅ Мойка завершена
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      {trackingCars.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#666', marginTop: '40px' }}>
-          Введите номер авто для отслеживания
+      {trackedCars.length === 0 && (
+        <div className="empty-state">
+          Добавьте номер авто для отслеживания
         </div>
       )}
     </div>
