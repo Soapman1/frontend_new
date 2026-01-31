@@ -11,8 +11,24 @@ const api = axios.create({
   }
 });
 
+api.interceptors.request.use(config => {
+  console.log('Request:', config.method.toUpperCase(), config.url);
+  return config;
+});
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      console.error('Unauthorized - перенаправление на логин');
+      // Можно добавить редирект на логин здесь если нужно
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Логин больше не сохраняет токен в localStorage - он в cookie
-export const login = async (login, password, rememberMe = false) => {
+export const login = async (login, password, rememberMe) => {
   const res = await api.post('/login', { login, password, rememberMe });
   return res.data;
 };
@@ -26,7 +42,6 @@ export const checkAuth = async () => {
   return res.data;
 };
 
-// Остальные функции без изменений, но используем api вместо axios
 export const getCars = async () => {
   const res = await api.get('/api/operator/cars');
   return res.data;
@@ -49,5 +64,10 @@ export const deleteCar = async (id) => {
 
 export const updateCarStatus = async (id, status) => {
   const res = await api.put(`/api/operator/cars/${id}/status`, { status });
+  return res.data;
+};
+
+export const searchCar = async (plate) => {
+  const res = await axios.get(`${API_URL}/api/public/car-status?plate=${plate}`);
   return res.data;
 };
