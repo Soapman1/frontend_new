@@ -29,7 +29,7 @@ function App() {
   if (loading) return <div>Загрузка...</div>;
 
   return (
-    <Router>
+    
       <div>
         {user && (
           <div style={{ padding: '10px', background: '#f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
@@ -49,7 +49,6 @@ function App() {
           <Route path="/" element={<Navigate to="/track" />} />
         </Routes>
       </div>
-    </Router>
   );
 }
 
