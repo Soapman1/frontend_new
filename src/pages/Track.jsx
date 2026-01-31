@@ -100,12 +100,12 @@ function Track() {
       const data = res.data;
       
       const newCar = {
-        plate_number: data.plate_number || searchPlate.toUpperCase(),
-        status: data.status || 'В очереди',
-        wait_time: data.wait_time,
-        created_at: data.expires_at,
-        isActive: true,
-        addedAt: Date.now()
+      plate_number: data.plate_number || searchPlate.toUpperCase(),
+      status: data.status || 'В очереди',
+      wait_time: data.wait_time,
+      expires_at: data.expires_at, // <-- Исправлено! Было created_at: data.expires_at
+      isActive: true,
+      addedAt: Date.now()
       };
       
       setTrackedCars([...trackedCars, newCar]);
@@ -130,9 +130,16 @@ function Track() {
   };
 
   const getRemainingTime = (car) => {
-  if (!car.expires_at) return null;  // Если нет expires_at, используем старый метод
-  return new Date(car.expires_at).getTime() - Date.now();
-};
+  // Сначала проверяем expires_at (новый способ), потом created_at (старый fallback)
+  if (car.expires_at) {
+    return new Date(car.expires_at).getTime() - Date.now();
+  }
+  if (car.created_at && car.wait_time) {
+    const endTime = new Date(car.created_at).getTime() + car.wait_time * 60000;
+    return endTime - Date.now();
+  }
+  return null;
+  };
 
   // Разделение: активные все кроме "Завершено"
   const activeCars = trackedCars.filter(c => c.status !== 'Завершено');
