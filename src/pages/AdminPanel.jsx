@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';  // Используем твой api с withCredentials
+import { api } from '../api';
 import '../styles/AdminPanel.css';
 
 function AdminPanel() {
@@ -15,8 +15,7 @@ function AdminPanel() {
 
   const fetchUsers = async () => {
     try {
-      console.log('Загрузка пользователей...');
-      const res = await api.get('/api/admin/users');  // api уже с cookie
+      const res = await api.get('/api/admin/users');
       setUsers(res.data);
       setLoading(false);
     } catch (err) {
@@ -53,6 +52,10 @@ function AdminPanel() {
     }
   };
 
+  const handleLoginRedirect = () => {
+    window.location.href = '/#/login';
+  };
+
   const getStatus = (subEnd) => {
     if (!subEnd) return { text: 'Нет подписки', class: 'expired' };
     const end = new Date(subEnd);
@@ -83,7 +86,7 @@ function AdminPanel() {
   if (error) return (
     <div className="error">
       <p>❌ {error}</p>
-      <button onClick={() => window.location.href = '/login'}>Войти</button>
+      <button onClick={handleLoginRedirect}>Войти</button>
     </div>
   );
 
