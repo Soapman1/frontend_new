@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../api';  // Используем твой api с withCredentials
 import '../styles/AdminPanel.css';
-
-const API_URL = process.env.REACT_APP_API_URL || 'https://car-status-backend.onrender.com';
 
 function AdminPanel() {
   const [users, setUsers] = useState([]);
@@ -11,78 +9,44 @@ function AdminPanel() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
-  // Получаем токен напрямую из localStorage
-  const getToken = () => localStorage.getItem('token');
-
   useEffect(() => {
-    // Проверяем авторизацию сразу
-    const token = getToken();
-    if (!token) {
-      setError('Не авторизован. Войдите сначала.');
-      setLoading(false);
-      return;
-    }
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
-    const token = getToken();
-    
-    console.log('Token:', token ? 'есть' : 'НЕТ');
-    console.log('API URL:', API_URL);
-
     try {
-      const res = await axios.get(`${API_URL}/api/admin/users`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      console.log('Загрузка пользователей...');
+      const res = await api.get('/api/admin/users');  // api уже с cookie
       setUsers(res.data);
       setLoading(false);
     } catch (err) {
-      console.error('Full error:', err);
+      console.error('Error:', err);
       if (err.response?.status === 401) {
         setError('Ошибка авторизации. Перелогиньтесь.');
+      } else if (err.response?.status === 403) {
+        setError('Нет прав администратора.');
       } else {
-        setError(err.response?.data?.error || err.message);
+        setError(err.response?.data?.error || 'Ошибка загрузки');
       }
       setLoading(false);
     }
   };
 
-  const deleteUser = async (id, login) => {
+  const handleDelete = async (id, login) => {
     if (!window.confirm(`Удалить аккаунт ${login}?`)) return;
-    
-    const token = getToken();
-    if (!token) {
-      alert('Не авторизован');
-      return;
-    }
-    
     try {
-      await axios.delete(`${API_URL}/api/admin/users/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/api/admin/users/${id}`);
       fetchUsers();
     } catch (err) {
-      alert('Ошибка удаления: ' + (err.response?.data?.error || err.message));
+      alert('Ошибка: ' + (err.response?.data?.error || err.message));
     }
   };
 
-  const extendSubscription = async (id, days) => {
-    const token = getToken();
-    if (!token) {
-      alert('Не авторизован');
-      return;
-    }
-    
+  const handleExtend = async (id) => {
+    const days = prompt('На сколько дней продлить?');
+    if (!days || isNaN(days)) return;
     try {
-      await axios.post(
-        `${API_URL}/api/admin/users/${id}/extend`,
-        { days: parseInt(days) },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post(`/api/admin/users/${id}/extend`, { days: parseInt(days) });
       fetchUsers();
     } catch (err) {
       alert('Ошибка: ' + (err.response?.data?.error || err.message));
@@ -106,13 +70,11 @@ function AdminPanel() {
                          u.owner_name?.toLowerCase().includes(search.toLowerCase());
     
     if (!matchesSearch) return false;
-    
     if (filter === 'all') return true;
     
     const status = getStatus(u.subscription_end);
-    if (filter === 'active') return status.class === 'active' || status.class === 'warning';
+    if (filter === 'active') return status.class !== 'expired';
     if (filter === 'expired') return status.class === 'expired';
-    
     return true;
   });
 
@@ -140,8 +102,8 @@ function AdminPanel() {
         
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="filter-select">
           <option value="all">Все аккаунты</option>
-          <option value="active">Активные подписки</option>
-          <option value="expired">Истекшие/нет подписки</option>
+          <option value="active">Активные</option>
+          <option value="expired">Истекшие/нет</option>
         </select>
         
         <span className="count">Всего: {filteredUsers.length}</span>
@@ -172,22 +134,10 @@ function AdminPanel() {
                 <td><span className={`status-badge ${status.class}`}>{status.text}</span></td>
                 <td>{u.subscription_end ? new Date(u.subscription_end).toLocaleDateString('ru-RU') : 'Нет'}</td>
                 <td className="actions">
-                  <button 
-                    className="btn-extend"
-                    onClick={() => {
-                      const days = prompt('На сколько дней продлить?');
-                      if (days && !isNaN(days)) extendSubscription(u.id, days);
-                    }}
-                    title="Продлить подписку"
-                  >
+                  <button className="btn-extend" onClick={() => handleExtend(u.id)} title="Продлить">
                     ⏱
                   </button>
-                  
-                  <button 
-                    className="btn-delete"
-                    onClick={() => deleteUser(u.id, u.login)}
-                    title="Удалить аккаунт"
-                  >
+                  <button className="btn-delete" onClick={() => handleDelete(u.id, u.login)} title="Удалить">
                     🗑
                   </button>
                 </td>

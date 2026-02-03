@@ -3,9 +3,9 @@ import axios from 'axios';
 const API_URL = process.env.REACT_APP_API_URL || 'https://car-status-backend.onrender.com';
 
 // ✅ Важно: разрешаем передачу cookies
-const api = axios.create({
+export const api = axios.create({  // <-- экспортируем api
   baseURL: API_URL,
-  withCredentials: true, // Отправляем и принимаем cookies
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -20,14 +20,13 @@ api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
-      console.error('Unauthorized - перенаправление на логин');
-      // Можно добавить редирект на логин здесь если нужно
+      console.error('Unauthorized');
     }
     return Promise.reject(error);
   }
 );
 
-// Логин больше не сохраняет токен в localStorage - он в cookie
+
 export const login = async (login, password, rememberMe) => {
   const res = await api.post('/login', { login, password, rememberMe });
   return res.data;
