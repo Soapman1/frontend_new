@@ -29,7 +29,6 @@ function App() {
 
   if (loading) return <div>Загрузка...</div>;
 
-  // Проверка админа по логину (из env или конкретный логин)
   const isAdmin = user?.login === process.env.REACT_APP_ADMIN_LOGIN;
 
   return (
