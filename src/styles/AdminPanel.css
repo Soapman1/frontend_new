@@ -113,26 +113,31 @@
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
+  align-items: center;
 }
 
 .btn-extend {
   background: #e3f2fd;
   color: #1976d2;
+  align-items: center;
 }
 
 .btn-extend:hover {
   background: #1976d2;
   color: white;
+  align-items: center;
 }
 
 .btn-delete {
   background: #ffebee;
   color: #c62828;
+  align-items: center;
 }
 
 .btn-delete:hover {
   background: #c62828;
   color: white;
+  align-items: center;
 }
 
 code {
