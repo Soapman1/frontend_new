@@ -103,6 +103,8 @@
 .actions {
   display: flex;
   gap: 8px;
+  justify-content: center;  /* Центрируем кнопки по горизонтали в ячейке */
+  align-items: center;      /* Центрируем по вертикали */
 }
 
 .actions button {
@@ -113,31 +115,33 @@
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
-  align-items: center;
+  
+  /* Главное для центрирования: */
+  display: flex;            /* Включаем flex */
+  align-items: center;      /* Центрируем по вертикали */
+  justify-content: center;  /* Центрируем по горизонтали */
+  padding: 0;               /* Убираем внутренние отступы */
 }
 
+/* Убираем text-align с кнопок (не нужен при flex) */
 .btn-extend {
   background: #e3f2fd;
   color: #1976d2;
-  text-align: center;
 }
 
 .btn-extend:hover {
   background: #1976d2;
   color: white;
-  text-align: center;
 }
 
 .btn-delete {
   background: #ffebee;
   color: #c62828;
-  text-align: center;
 }
 
 .btn-delete:hover {
   background: #c62828;
   color: white;
-  text-align: center;
 }
 
 code {
