@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Operator from './pages/Operator';
 import Track from './pages/Track';
+import AdminPanel from './pages/AdminPanel';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -40,6 +41,7 @@ function App() {
         )}
         
         <Routes>
+          <Route path="/admin" element={<AdminPanel />} />
           <Route path="/" element={<Home />} />
           <Route path="/login" element={
             user ? <Navigate to="/operator" /> : <Login onLogin={handleLogin} />
