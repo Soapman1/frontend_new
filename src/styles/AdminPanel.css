@@ -119,25 +119,25 @@
 .btn-extend {
   background: #e3f2fd;
   color: #1976d2;
-  align-items: center;
+  text-align: center;
 }
 
 .btn-extend:hover {
   background: #1976d2;
   color: white;
-  align-items: center;
+  text-align: center;
 }
 
 .btn-delete {
   background: #ffebee;
   color: #c62828;
-  align-items: center;
+  text-align: center;
 }
 
 .btn-delete:hover {
   background: #c62828;
   color: white;
-  align-items: center;
+  text-align: center;
 }
 
 code {
