@@ -2,28 +2,51 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../styles/AdminPanel.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 'https://car-status-backend.onrender.com';
+
 function AdminPanel() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // all, active, expired
+  const [filter, setFilter] = useState('all');
 
-  const token = localStorage.getItem('token');
+  // Получаем токен напрямую из localStorage
+  const getToken = () => localStorage.getItem('token');
 
   useEffect(() => {
+    // Проверяем авторизацию сразу
+    const token = getToken();
+    if (!token) {
+      setError('Не авторизован. Войдите сначала.');
+      setLoading(false);
+      return;
+    }
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
+    const token = getToken();
+    
+    console.log('Token:', token ? 'есть' : 'НЕТ');
+    console.log('API URL:', API_URL);
+
     try {
-      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const res = await axios.get(`${API_URL}/api/admin/users`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       setUsers(res.data);
       setLoading(false);
     } catch (err) {
-      setError(err.response?.data?.error || 'Ошибка загрузки');
+      console.error('Full error:', err);
+      if (err.response?.status === 401) {
+        setError('Ошибка авторизации. Перелогиньтесь.');
+      } else {
+        setError(err.response?.data?.error || err.message);
+      }
       setLoading(false);
     }
   };
@@ -31,26 +54,38 @@ function AdminPanel() {
   const deleteUser = async (id, login) => {
     if (!window.confirm(`Удалить аккаунт ${login}?`)) return;
     
+    const token = getToken();
+    if (!token) {
+      alert('Не авторизован');
+      return;
+    }
+    
     try {
-      await axios.delete(`${process.env.REACT_APP_API_URL}/api/admin/users/${id}`, {
+      await axios.delete(`${API_URL}/api/admin/users/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchUsers();
     } catch (err) {
-      alert('Ошибка удаления: ' + err.response?.data?.error);
+      alert('Ошибка удаления: ' + (err.response?.data?.error || err.message));
     }
   };
 
   const extendSubscription = async (id, days) => {
+    const token = getToken();
+    if (!token) {
+      alert('Не авторизован');
+      return;
+    }
+    
     try {
       await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/admin/users/${id}/extend`,
-        { days },
+        `${API_URL}/api/admin/users/${id}/extend`,
+        { days: parseInt(days) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       fetchUsers();
     } catch (err) {
-      alert('Ошибка: ' + err.response?.data?.error);
+      alert('Ошибка: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -65,9 +100,8 @@ function AdminPanel() {
     return { text: `Активна (${daysLeft} дн.)`, class: 'active' };
   };
 
-  // Фильтрация
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.login.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = u.login?.toLowerCase().includes(search.toLowerCase()) ||
                          u.carwash_name?.toLowerCase().includes(search.toLowerCase()) ||
                          u.owner_name?.toLowerCase().includes(search.toLowerCase());
     
@@ -83,7 +117,13 @@ function AdminPanel() {
   });
 
   if (loading) return <div className="loading">Загрузка...</div>;
-  if (error) return <div className="error">Ошибка: {error}</div>;
+  
+  if (error) return (
+    <div className="error">
+      <p>❌ {error}</p>
+      <button onClick={() => window.location.href = '/login'}>Войти</button>
+    </div>
+  );
 
   return (
     <div className="admin-panel">
@@ -105,6 +145,7 @@ function AdminPanel() {
         </select>
         
         <span className="count">Всего: {filteredUsers.length}</span>
+        <button onClick={fetchUsers} className="btn-refresh">🔄 Обновить</button>
       </div>
 
       <table className="users-table">
@@ -135,7 +176,7 @@ function AdminPanel() {
                     className="btn-extend"
                     onClick={() => {
                       const days = prompt('На сколько дней продлить?');
-                      if (days) extendSubscription(u.id, days);
+                      if (days && !isNaN(days)) extendSubscription(u.id, days);
                     }}
                     title="Продлить подписку"
                   >
