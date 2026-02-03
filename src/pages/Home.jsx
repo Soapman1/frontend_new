@@ -4,7 +4,7 @@ import { checkAuth } from '../api';
 
 function Home() {
   const navigate = useNavigate();
-  const [isAuth, setIsAuth] = useState(null); // null = загрузка, false = не авторизован, true = авторизован
+  const [isAuth, setIsAuth] = useState(false);
 
   useEffect(() => {
     checkAuth()
@@ -12,19 +12,11 @@ function Home() {
       .catch(() => setIsAuth(false));
   }, []);
 
-  if (isAuth === null) return <div>Загрузка...</div>;
-
   return (
     <div className="center-page">
       {!isAuth && (
         <button className="login-btn" onClick={() => navigate('/login')}>
           Вход
-        </button>
-      )}
-
-      {isAuth && (
-        <button className="login-btn" onClick={() => navigate('/operator')}>
-          К оператору
         </button>
       )}
 
